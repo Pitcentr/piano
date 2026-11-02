@@ -68,7 +68,9 @@ export function renderKeyboard(root, layout, { practice = false } = {}) {
     button.setAttribute("aria-label", key.name);
     const label = document.createElement("span");
     label.className = "key-label";
-    button.append(label);
+    const times = document.createElement("span");
+    times.className = "key-times";
+    button.append(label, times);
     if (!key.black && parseNote(key.name).step === "C") {
       const tick = document.createElement("span");
       tick.className = "key-tick";
@@ -79,7 +81,7 @@ export function renderKeyboard(root, layout, { practice = false } = {}) {
   }
 }
 
-export function paintKeyboard(root, { target = null, heard = null, bad = null, done = null } = {}) {
+export function paintKeyboard(root, { target = null, heard = null, bad = null, done = null, times = 1 } = {}) {
   if (!root) return;
   root.querySelectorAll(".key").forEach((key) => {
     const name = key.dataset.name;
@@ -89,12 +91,16 @@ export function paintKeyboard(root, { target = null, heard = null, bad = null, d
     key.classList.toggle("live", !!heard && name === heard && name === target);
     key.classList.toggle("bad", !!bad && name === bad);
     key.classList.toggle("done", !!done && done.has(name));
+    key.classList.toggle("repeat", isTarget && times > 1);
     if (isTarget) key.setAttribute("aria-current", "true");
     else key.removeAttribute("aria-current");
     const label = key.querySelector(".key-label");
-    if (!label) return;
-    const black = key.classList.contains("black");
-    label.textContent = isTarget && !black ? ruStep(name) : "";
+    if (label) {
+      const black = key.classList.contains("black");
+      label.textContent = isTarget && !black ? ruStep(name) : "";
+    }
+    const mark = key.querySelector(".key-times");
+    if (mark) mark.textContent = isTarget && times > 1 ? `x${times}` : "";
   });
 }
 

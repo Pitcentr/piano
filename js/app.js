@@ -669,6 +669,7 @@ function refreshPlayNote() {
   const note = parseNote(name);
   $("hero-name").textContent = ruStep(name);
   $("hero-oct").textContent = ruOctave(note.oct);
+  const times = pressTimes(play);
   const missing = !state.practice && typeof state.calibration.map[name] !== "number";
   $("hero-msg").textContent = play.message || (missing ? "Эта клавиша не записана. Её можно пропустить." : "");
   $("hero-note").classList.toggle("shake", !!play.message);
@@ -684,7 +685,7 @@ function refreshPlayNote() {
     item.textContent = ruStep(coming);
     list.append(item);
   });
-  paintKeyboard($("play-keys"), { target: name });
+  paintKeyboard($("play-keys"), { target: name, times });
   placeGuide();
 }
 
@@ -766,6 +767,22 @@ function holdBlocks(beats) {
   return 5;
 }
 
+function pressTimes(play) {
+  if (!play || play.index >= play.figure.length) return 1;
+  return repeatAhead(play.figure, play.index).count;
+}
+
+function repeatAhead(figure, index) {
+  const name = figure[index].name;
+  let count = 1;
+  let next = index + 1;
+  while (next < figure.length && figure[next].name === name) {
+    count += 1;
+    next += 1;
+  }
+  return { count, next };
+}
+
 function tryHit(now) {
   const play = state.play;
   if (!play || play.index >= play.figure.length) return false;
@@ -820,7 +837,7 @@ function onWrong(now, name) {
   $("hero-msg").textContent = play.message;
   $("play-miss").hidden = false;
   $("play-miss").textContent = `Мимо: ${play.mistakes}`;
-  paintKeyboard($("play-keys"), { target, bad: name });
+  paintKeyboard($("play-keys"), { target, bad: name, times: pressTimes(play) });
   const hero = $("hero-note");
   hero.classList.remove("shake");
   void hero.offsetWidth;
@@ -945,6 +962,7 @@ function updatePlayEar(now) {
     target,
     heard: nearest,
     bad: now < play.badUntil ? play.badName : null,
+    times: pressTimes(play),
   });
   paintPlayHeard(nearest);
   paintMeter($("play-meter"), ear.rms, gate());
@@ -1012,14 +1030,11 @@ function updateStick(now) {
   const pool = $("sticks");
   const roles = ["now", "next", "soon"];
   const columns = [];
-  const seen = new Set();
-  for (let offset = 0; offset < roles.length; offset += 1) {
-    const noteIndex = play.index + offset;
-    if (noteIndex >= play.figure.length) break;
-    const step = play.figure[noteIndex];
-    if (seen.has(step.name)) continue;
-    seen.add(step.name);
-    columns.push({ noteIndex, role: roles[columns.length], step });
+  let noteIndex = play.index;
+  for (let role = 0; role < roles.length && noteIndex < play.figure.length; role += 1) {
+    const run = repeatAhead(play.figure, noteIndex);
+    columns.push({ noteIndex, role: roles[role], step: play.figure[noteIndex] });
+    noteIndex = run.next;
   }
   while (pool.children.length < columns.length) {
     const el = document.createElement("div");
@@ -1064,7 +1079,7 @@ function updateStick(now) {
     play.message = "";
     $("hero-msg").textContent = "";
     $("hero-note").classList.remove("shake");
-    paintKeyboard($("play-keys"), { target: play.song.notes[play.index] });
+    paintKeyboard($("play-keys"), { target: play.song.notes[play.index], times: pressTimes(play) });
   }
 }
 

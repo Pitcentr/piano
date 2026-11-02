@@ -575,6 +575,22 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
 }
 .key-label { font-size: 13px; font-weight: 750; color: #5c4d3c; }
 .key.black .key-label { color: #1a140e; top: 8px; bottom: auto; }
+.key.repeat .key-label { bottom: 20px; }
+.key-times {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 3px;
+  z-index: 2;
+  text-align: center;
+  pointer-events: none;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #3a2808;
+}
+.key.black .key-times { bottom: 4px; color: #fff6e4; font-size: 11px; }
 .key-tick { font-size: 10px; letter-spacing: 0.06em; color: #b3a48f; }
 .key.white.target .key-tick { visibility: hidden; }
 .key.sustain::before {
