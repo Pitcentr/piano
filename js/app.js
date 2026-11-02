@@ -568,8 +568,8 @@ function openSongs() {
 
 function renderSongs() {
   $("songs-lead").textContent = state.practice
-    ? "Жёлтый столбец — эта клавиша. Оранжевый — следующая, синий — ещё одна. Нажимайте жёлтую на экране в долю."
-    : "Жёлтый столбец — эта клавиша. Оранжевый — следующая, синий — ещё одна. Нажимайте жёлтую в долю.";
+    ? "Жёлтый столбец — эта клавиша. Оранжевый — следующая, синий — ещё одна. Один блок — коротко, пять — длинно. Нажимайте жёлтую на экране в долю."
+    : "Жёлтый столбец — эта клавиша. Оранжевый — следующая, синий — ещё одна. Один блок — коротко, пять — длинно. Нажимайте жёлтую в долю.";
   const root = $("song-list");
   root.replaceChildren();
   for (const song of SONGS) {
@@ -645,7 +645,6 @@ async function startSong(id) {
     wrongLock: 0,
     released: true,
     earlyHold: false,
-    sustain: null,
   };
   ear.history = [];
   ear.matchStreak = 0;
@@ -655,7 +654,7 @@ async function startSong(id) {
   const countName = meter === 3 ? "три" : "четыре";
   const where = state.practice ? "клавишу на экране" : "клавишу на пианино";
   $("play-mode").textContent =
-    `Сначала ${countName} доли без игры. Жёлтый столбец стоит на нужной клавише — нажимайте ${where}. Столбец заполняется, пока ноту держат, и вспыхивает, когда пора отпустить.`;
+    `Сначала ${countName} доли без игры. Жёлтый столбец — нужная клавиша. Внизу один блок — короткое нажатие, пять блоков — длинное. Нажимайте ${where} в долю: следующая нота идёт сразу.`;
   $("play-listen").hidden = state.practice;
   $("sens-play").hidden = state.practice;
   $("sticks").replaceChildren();
@@ -759,52 +758,17 @@ function finishSong() {
   show("done");
 }
 
-function beginSustain(now) {
-  const play = state.play;
-  const beats = play.figure[play.index].beats;
-  const from = musicalNow(now);
-  const writtenEnd = play.dues[play.index] + beats * play.beatMs;
-  play.sustain = {
-    index: play.index,
-    name: play.figure[play.index].name,
-    from,
-    until: Math.max(writtenEnd, from + Math.min(play.beatMs * 0.35, beats * play.beatMs)),
-  };
-}
-
-function burstStick(name) {
-  const play = state.play;
-  if (!play) return;
-  const spot = keyCenter(play.layout, name);
-  const burst = document.createElement("div");
-  burst.className = "stick-burst";
-  burst.style.left = spot ? `${spot.center}%` : "50%";
-  for (let i = 0; i < 12; i += 1) {
-    const spark = document.createElement("i");
-    const angle = (i / 12) * Math.PI * 2;
-    const reach = i % 2 === 0 ? 72 : 40;
-    spark.style.setProperty("--dx", `${Math.cos(angle) * reach}px`);
-    spark.style.setProperty("--dy", `${Math.sin(angle) * reach * 0.72 - 12}px`);
-    burst.append(spark);
-  }
-  $("highway").append(burst);
-  setTimeout(() => burst.remove(), 1600);
-}
-
-function paintHold(progress) {
-  const play = state.play;
-  const name = play.sustain?.name;
-  $("play-keys").querySelectorAll(".key").forEach((key) => {
-    const on = !!name && key.dataset.name === name && progress > 0;
-    key.classList.toggle("sustain", on);
-    if (on) key.style.setProperty("--hold", progress.toFixed(3));
-    else key.style.removeProperty("--hold");
-  });
+function holdBlocks(beats) {
+  if (beats <= 0.5) return 1;
+  if (beats <= 1) return 2;
+  if (beats <= 1.5) return 3;
+  if (beats <= 2) return 4;
+  return 5;
 }
 
 function tryHit(now) {
   const play = state.play;
-  if (!play || play.sustain || play.index >= play.figure.length) return false;
+  if (!play || play.index >= play.figure.length) return false;
   const due = play.dues[play.index];
   const earlyMs = due - musicalNow(now);
   const beat = play.beatMs;
@@ -833,7 +797,7 @@ function tryHit(now) {
   $("hero-msg").textContent = "";
   $("hero-note").classList.remove("shake");
   showTiming(kind, label);
-  beginSustain(now);
+  advanceNote();
   return true;
 }
 
@@ -870,13 +834,11 @@ function skipNote() {
   play.mistakes += 1;
   if (play.holding) resumeClock(now, play.heldMusical);
   play.earlyHold = false;
-  play.sustain = null;
-  paintHold(0);
   advanceNote();
 }
 
 function onKeyClick(name) {
-  if (state.screen !== "play" || !state.practice || !state.play || state.play.sustain) return;
+  if (state.screen !== "play" || !state.practice || !state.play) return;
   const now = performance.now();
   const target = state.play.song.notes[state.play.index];
   if (name === target) tryHit(now);
@@ -986,7 +948,7 @@ function updatePlayEar(now) {
   });
   paintPlayHeard(nearest);
   paintMeter($("play-meter"), ear.rms, gate());
-  if (play.sustain || typeof targetFreq !== "number") return;
+  if (typeof targetFreq !== "number") return;
   const hearing = ear.freq && matchesTarget(ear.freq, targetFreq, ear.samples, ear.sampleRate);
   if (play.earlyHold && hearing && inHitWindow(now)) {
     tryHit(now);
@@ -1039,33 +1001,14 @@ function paintBeat(now, musical) {
 function updateStick(now) {
   const play = state.play;
   if (!play || state.screen !== "play" || play.index >= play.figure.length) return;
-  let musical = musicalNow(now);
-  if (play.sustain && musical >= play.sustain.until) {
-    const name = play.sustain.name;
-    play.sustain = null;
-    paintHold(0);
-    burstStick(name);
-    advanceNote();
-    if (!state.play || state.screen !== "play" || state.play.index >= state.play.figure.length) return;
-    musical = musicalNow(now);
-  }
+  const musical = musicalNow(now);
   const due = play.dues[play.index];
-  if (!play.sustain && !play.holding && musical >= due) {
+  if (!play.holding && musical >= due) {
     play.holding = true;
     play.heldMusical = due;
     play.holdReal = now;
-    musical = due;
   }
-  paintBeat(now, musical);
-  let holdProgress = 0;
-  if (play.sustain) {
-    const span = Math.max(1, play.sustain.until - play.sustain.from);
-    holdProgress = Math.min(1, Math.max(0, (musical - play.sustain.from) / span));
-    $("play-kicker").textContent = holdProgress > 0.82 ? "Отпустите" : "Держите";
-    if (holdProgress > 0.82) showTiming("release", "Отпустите");
-    else if (holdProgress > 0.22) showTiming("on", "Держите");
-  }
-  paintHold(holdProgress);
+  paintBeat(now, play.holding ? play.heldMusical : musical);
   const pool = $("sticks");
   const roles = ["now", "next", "soon"];
   const columns = [];
@@ -1084,7 +1027,8 @@ function updateStick(now) {
     const body = document.createElement("div");
     body.className = "stick-body";
     const fill = document.createElement("div");
-    fill.className = "stick-fill";
+    fill.className = "stick-blocks";
+    for (let block = 0; block < 5; block += 1) fill.append(document.createElement("i"));
     body.append(fill);
     const name = document.createElement("span");
     name.className = "stick-name";
@@ -1095,12 +1039,11 @@ function updateStick(now) {
   columns.forEach((column, slot) => {
     const el = pool.children[slot];
     const spot = keyCenter(play.layout, column.step.name);
-    const filling = play.sustain && column.noteIndex === play.sustain.index;
     el.style.left = spot ? `${spot.left}%` : "0";
     el.style.width = spot ? `${spot.width}%` : "8%";
     el.style.height = "100%";
     el.style.transform = "none";
-    el.className = `note-stick ${column.role}${filling ? " sustain" : ""}${column.role === "now" && play.holding && !filling ? " waiting" : ""}`;
+    el.className = `note-stick ${column.role}${column.role === "now" && play.holding ? " waiting" : ""}`;
     const label = el.querySelector(".stick-name");
     if (label) {
       const note = parseNote(column.step.name);
@@ -1110,8 +1053,10 @@ function updateStick(now) {
       oct.textContent = ruOctaveShort(note.oct);
       label.replaceChildren(step, oct);
     }
-    const fill = el.querySelector(".stick-fill");
-    if (fill) fill.style.height = filling ? `${holdProgress * 100}%` : "0%";
+    const count = holdBlocks(column.step.beats);
+    el.querySelectorAll(".stick-blocks i").forEach((block, index) => {
+      block.classList.toggle("on", index < count);
+    });
   });
   if (play.badUntil && now > play.badUntil) {
     play.badUntil = 0;
