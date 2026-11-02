@@ -30,7 +30,7 @@ function parabolicMinimum(buffer, tau) {
  * YIN fundamental-frequency estimate.
  * Returns null when the signal is not a clear periodic tone.
  */
-export function detectPitch(samples, sampleRate, threshold = 0.15) {
+export function detectPitch(samples, sampleRate, threshold = 0.2) {
   const n = samples.length;
   if (n < 256) return null;
   const tauMin = Math.max(2, Math.floor(sampleRate / 1800));
@@ -112,14 +112,14 @@ export function analyze(samples, sampleRate) {
 /** True when the heard pitch is the calibrated key, including a common octave slip. */
 export function matchesTarget(freq, targetFreq, samples, sampleRate) {
   if (!freq || !targetFreq) return false;
-  if (Math.abs(1200 * Math.log2(freq / targetFreq)) <= 55) return true;
+  if (Math.abs(1200 * Math.log2(freq / targetFreq)) <= 80) return true;
   if (!samples) return false;
   for (const harmonic of [2, 3]) {
     const cents = Math.abs(1200 * Math.log2(freq / (targetFreq * harmonic)));
-    if (cents > 55) continue;
+    if (cents > 80) continue;
     const atFundamental = goertzel(samples, sampleRate, targetFreq);
     const atHeard = goertzel(samples, sampleRate, freq);
-    if (atHeard > 0 && atFundamental > atHeard * 0.18) return true;
+    if (atHeard > 0 && atFundamental > atHeard * 0.08) return true;
   }
   return false;
 }

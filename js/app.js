@@ -29,7 +29,7 @@ const state = {
   calibration: loadCalibration(),
   audio: null,
   noiseFloor: 0.012,
-  sensitivity: "4",
+  sensitivity: "3.2",
   cal: null,
   play: null,
   demo: false,
@@ -48,6 +48,7 @@ const ear = {
   history: [],
   matchStreak: 0,
   wrongStreak: 0,
+  lastMatch: 0,
   lastDetect: 0,
 };
 
@@ -280,11 +281,11 @@ function medianFreq() {
 
 function trackStability(now) {
   const freq = ear.freq;
-  if (!freq || ear.confidence < 0.82) {
+  if (!freq || ear.confidence < 0.72) {
     resetStability();
     return 0;
   }
-  if (ear.stableFreq && Math.abs(centsBetween(freq, ear.stableFreq)) > 25) {
+  if (ear.stableFreq && Math.abs(centsBetween(freq, ear.stableFreq)) > 40) {
     ear.stableSince = now;
     ear.stableFreq = freq;
     ear.pitchSamples = [freq];
@@ -318,7 +319,7 @@ function updateListen() {
   const heard = ear.freq ? describeFreq(ear.freq) : null;
   const onBoard = heard && state.cal.layout.byName.has(heard.name) ? heard.name : null;
   paintKeyboard($("cal-keys"), { heard: onBoard });
-  if (heard && ear.confidence > 0.8) state.cal.heard = true;
+  if (heard && ear.confidence > 0.7) state.cal.heard = true;
   $("listen-next").disabled = !state.cal.heard;
   $("tuner-hint").textContent = heard
     ? "Микрофон слышит пианино. Можно переходить к клавишам."
@@ -647,12 +648,14 @@ async function startSong(id) {
     openUntil: 0,
     attackAt: 0,
     wrongLock: 0,
+    peakRms: 0,
     released: true,
     earlyHold: false,
   };
   ear.history = [];
   ear.matchStreak = 0;
   ear.wrongStreak = 0;
+  ear.lastMatch = 0;
   show("play");
   $("play-title").textContent = song.title;
   const countName = meter === 3 ? "три" : "четыре";
@@ -731,6 +734,7 @@ function advanceNote() {
   play.index += 1;
   play.openUntil = 0;
   play.attackAt = 0;
+  play.peakRms = 0;
   play.message = "";
   play.badName = null;
   play.badUntil = 0;
@@ -738,6 +742,7 @@ function advanceNote() {
   ear.history = [];
   ear.matchStreak = 0;
   ear.wrongStreak = 0;
+  ear.lastMatch = 0;
   if (play.index >= play.figure.length) {
     finishSong();
     return;
@@ -982,7 +987,7 @@ function onKeyClick(name) {
 }
 
 function gate() {
-  return Math.max(0.008, state.noiseFloor * Number(state.sensitivity));
+  return Math.max(0.006, state.noiseFloor * Number(state.sensitivity));
 }
 
 function observeNoise(rms) {
@@ -1008,18 +1013,20 @@ function paintSens() {
   });
 }
 
-function nearestMapped(freq, map, maxCents) {
+function closestKey(freq, map) {
   let best = null;
-  let bestAbs = maxCents;
+  let bestAbs = Infinity;
+  let second = Infinity;
   for (const [name, value] of Object.entries(map)) {
     if (typeof value !== "number") continue;
     const delta = Math.abs(centsBetween(freq, value));
     if (delta < bestAbs) {
+      second = bestAbs;
       bestAbs = delta;
       best = name;
-    }
+    } else if (delta < second) second = delta;
   }
-  return best;
+  return best ? { name: best, cents: bestAbs, second } : null;
 }
 
 function isAttack(now, rms, threshold) {
@@ -1029,7 +1036,15 @@ function isAttack(now, rms, threshold) {
   if (history.length < 4) return false;
   let min = Infinity;
   for (let i = 0; i < history.length - 1; i++) min = Math.min(min, history[i].rms);
-  return rms > threshold && rms > min * 1.55 && rms - min > Math.max(0.006, threshold * 0.35);
+  return rms > threshold * 0.85 && rms > min * 1.25 && rms - min > Math.max(0.004, threshold * 0.28);
+}
+
+function noteReleased(threshold) {
+  const play = state.play;
+  if (ear.rms < threshold * 0.6) return true;
+  if (ear.rms > (play.peakRms || 0)) play.peakRms = ear.rms;
+  else play.peakRms = Math.max(ear.rms, play.peakRms * 0.995);
+  return ear.rms < play.peakRms * 0.8;
 }
 
 function paintPlayHeard(nearest) {
@@ -1051,7 +1066,7 @@ function readEar() {
   if (ctx.state === "suspended") ctx.resume();
   const full = new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(full);
-  const recent = full.subarray(full.length - 2048);
+  const recent = full.subarray(full.length - 3072);
   const { rms, signal, pitch } = analyze(recent, ctx.sampleRate);
   ear.rms = rms;
   ear.samples = signal;
@@ -1059,7 +1074,7 @@ function readEar() {
   ear.freq = pitch?.freq ?? null;
   ear.confidence = pitch?.confidence ?? 0;
   observeNoise(rms);
-  if (rms < gate()) {
+  if (rms < gate() * 0.55) {
     ear.freq = null;
     ear.confidence = 0;
   }
@@ -1069,13 +1084,14 @@ function updatePlayEar(now) {
   const play = state.play;
   if (!play || play.index >= play.figure.length || state.demo) return;
   const threshold = gate();
-  if (ear.rms < threshold * 0.75) {
+  if (noteReleased(threshold)) {
     play.released = true;
-    play.earlyHold = false;
+    if (ear.rms < threshold * 0.6) play.earlyHold = false;
   }
   const target = play.song.notes[play.index];
   const targetFreq = state.calibration.map[target];
-  const nearest = ear.freq ? nearestMapped(ear.freq, state.calibration.map, 60) : null;
+  const near = ear.freq ? closestKey(ear.freq, state.calibration.map) : null;
+  const nearest = near && near.cents <= 90 ? near.name : null;
   paintKeyboard($("play-keys"), {
     target,
     heard: nearest,
@@ -1085,30 +1101,37 @@ function updatePlayEar(now) {
   paintPlayHeard(nearest);
   paintMeter($("play-meter"), ear.rms, gate());
   if (typeof targetFreq !== "number") return;
-  const hearing = ear.freq && matchesTarget(ear.freq, targetFreq, ear.samples, ear.sampleRate);
-  if (play.earlyHold && hearing && inHitWindow(now)) {
-    tryHit(now);
-    return;
+  const off = ear.freq ? Math.abs(centsBetween(ear.freq, targetFreq)) : Infinity;
+  const direct = off <= 80 && (!near || near.name === target);
+  const slipped = off > 80 && matchesTarget(ear.freq, targetFreq, ear.samples, ear.sampleRate);
+  const hearing = direct || slipped;
+  if (hearing) {
+    ear.matchStreak += 1;
+    ear.lastMatch = now;
+    ear.wrongStreak = 0;
+  } else if (!ear.lastMatch || now - ear.lastMatch > 160) {
+    ear.matchStreak = 0;
   }
+  const repeat = play.index > 0 && play.song.notes[play.index - 1] === target;
   if (isAttack(now, ear.rms, threshold) && play.released && now > play.openUntil) {
     play.released = false;
     play.attackAt = now;
-    play.openUntil = now + 620;
-    ear.matchStreak = 0;
-    ear.wrongStreak = 0;
+    play.openUntil = now + 1100;
+    if (!hearing) {
+      ear.matchStreak = 0;
+      ear.wrongStreak = 0;
+    }
   }
-  if (!play.openUntil || now < play.attackAt + 70 || now > play.openUntil || !ear.freq) return;
-  if (hearing) {
-    ear.matchStreak += 1;
-    ear.wrongStreak = 0;
-    if (ear.matchStreak >= 2 && !tryHit(now)) play.earlyHold = true;
+  const freshStrike = play.attackAt && now >= play.attackAt + 45 && now <= play.openUntil;
+  const ready = hearing && ear.matchStreak >= 2 && (repeat ? freshStrike : inHitWindow(now));
+  if (ready || (play.earlyHold && hearing && inHitWindow(now))) {
+    if (!tryHit(now)) play.earlyHold = true;
     return;
   }
-  ear.matchStreak = 0;
-  if (!inHitWindow(now)) return;
-  if (nearest && nearest !== target) {
+  if (hearing || !inHitWindow(now)) return;
+  if (near && near.name !== target && near.cents <= 28 && near.second - near.cents >= 30) {
     ear.wrongStreak += 1;
-    if (ear.wrongStreak >= 2) onWrong(now, nearest);
+    if (ear.wrongStreak >= 3) onWrong(now, near.name);
   }
 }
 
