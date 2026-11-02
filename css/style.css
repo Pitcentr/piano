@@ -325,6 +325,7 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
 #play-heard { color: var(--muted); font-size: 14px; }
 .hero-note .sens { margin-top: 16px; }
 .hero-note .text-btn { margin-top: 10px; align-self: flex-start; }
+.demo-btn { margin-top: 14px; align-self: flex-start; padding: 10px 18px; font-size: 15px; }
 .stage, .play-heading { min-width: 0; }
 .stage { min-height: 0; display: flex; flex-direction: column; }
 .rhythm { display: flex; align-items: center; gap: 14px; min-height: 36px; padding: 0 16px 6px; }
@@ -519,6 +520,7 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
   appearance: none;
   cursor: default;
   overflow: hidden;
+  transition: transform 40ms ease-out;
 }
 .keys[data-practice="1"] .key { cursor: pointer; }
 .key.white {
@@ -552,6 +554,19 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
 .key.black.heard { box-shadow: 0 0 0 2px var(--gold-2); }
 .key.white.bad { background: linear-gradient(#ffe4de, #e7aaa0); }
 .key.black.bad { background: linear-gradient(#8d463d, #3f1d19); }
+.key.demo { transform-origin: top center; }
+.key.white.demo {
+  z-index: 2;
+  transform: scaleY(0.92);
+  background: linear-gradient(#f4ecdf, #d9c6a6 68%, #c9b492);
+  box-shadow: inset 0 14px 16px rgba(70, 45, 18, 0.22), inset -1px 0 0 rgba(70, 50, 30, 0.22);
+}
+.key.black.demo {
+  z-index: 4;
+  transform: scaleY(0.88);
+  background: linear-gradient(#2c2824, #0b0a09 58%);
+  box-shadow: inset 0 12px 14px rgba(0, 0, 0, 0.62);
+}
 .key.done::after {
   content: "";
   position: absolute;
@@ -627,5 +642,6 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
 }
 @media (prefers-reduced-motion: reduce) {
   .art-stick, .note-stick.waiting .stick-body, .shake, .stick-burst::before, .stick-burst i { animation: none; }
+  .key { transition: none; }
   button.song:hover { transform: none; }
 }

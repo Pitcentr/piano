@@ -32,6 +32,8 @@ const state = {
   sensitivity: "4",
   cal: null,
   play: null,
+  demo: false,
+  demoCtx: null,
 };
 
 const ear = {
@@ -558,6 +560,7 @@ function sparkline(notes) {
 }
 
 function openSongs() {
+  stopDemo({ restore: false });
   if (!state.practice && !state.calibration) {
     show("intro");
     return;
@@ -599,6 +602,7 @@ function renderSongs() {
 }
 
 async function startSong(id) {
+  stopDemo({ restore: false });
   if (!state.practice && !state.audio) {
     const ok = await enableMic();
     if (!ok) {
@@ -742,6 +746,7 @@ function advanceNote() {
 }
 
 function finishSong() {
+  stopDemo({ restore: false });
   const play = state.play;
   const clean = play.mistakes === 0 && play.early === 0 && play.late === 0;
   const parts = [];
@@ -844,7 +849,120 @@ function onWrong(now, name) {
   hero.classList.add("shake");
 }
 
+function paintDemoKey(name) {
+  $("play-keys")?.querySelectorAll(".key").forEach((key) => {
+    key.classList.toggle("demo", Boolean(name) && key.dataset.name === name);
+  });
+}
+
+let demoRun = 0;
+let demoVoices = [];
+
+function silenceDemo() {
+  const ctx = state.demoCtx || state.audio?.ctx;
+  const time = ctx?.currentTime ?? 0;
+  for (const voice of demoVoices) {
+    try {
+      voice.master.gain.cancelScheduledValues(time);
+      voice.master.gain.setValueAtTime(0.0001, time);
+      voice.master.disconnect();
+    } catch {
+      /* already closed */
+    }
+  }
+  demoVoices = [];
+}
+
+function stopDemo({ restore = true } = {}) {
+  demoRun += 1;
+  state.demo = false;
+  silenceDemo();
+  paintDemoKey(null);
+  const button = $("demo-play");
+  if (button) button.textContent = "Слушать";
+  if (restore && state.screen === "play" && state.play) refreshPlayNote();
+}
+
+async function demoContext() {
+  const existing = state.audio?.ctx;
+  const ctx = existing || state.demoCtx || new (window.AudioContext || window.webkitAudioContext)();
+  if (!existing) state.demoCtx = ctx;
+  if (ctx.state === "suspended") await ctx.resume();
+  return ctx;
+}
+
+function strikeKey(ctx, freq, seconds) {
+  const time = ctx.currentTime;
+  const master = ctx.createGain();
+  master.connect(ctx.destination);
+  master.gain.setValueAtTime(0.0001, time);
+  master.gain.exponentialRampToValueAtTime(0.2, time + 0.012);
+  master.gain.exponentialRampToValueAtTime(0.0001, time + seconds);
+  for (const [mult, type, amp] of [
+    [1, "triangle", 0.85],
+    [2, "sine", 0.26],
+    [4, "sine", 0.05],
+  ]) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, time);
+    gain.gain.value = amp;
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(time);
+    osc.stop(time + seconds + 0.04);
+  }
+  demoVoices.push({ master });
+}
+
+async function toggleDemo() {
+  if (state.demo) {
+    stopDemo();
+    return;
+  }
+  const play = state.play;
+  if (!play || state.screen !== "play" || !play.figure.length) return;
+  state.demo = true;
+  const button = $("demo-play");
+  if (button) button.textContent = "Стоп";
+  const ctx = await demoContext();
+  if (!state.demo || state.screen !== "play" || state.play !== play) return;
+  const run = ++demoRun;
+  let at = 0;
+  const steps = play.figure.map((step) => {
+    const item = { name: step.name, at, dur: step.beats * play.beatMs };
+    at += item.dur;
+    return item;
+  });
+  const total = at;
+  const origin = performance.now();
+  let sounded = -1;
+  const frame = (now) => {
+    if (run !== demoRun || !state.demo) return;
+    const elapsed = now - origin;
+    let index = -1;
+    for (let i = 0; i < steps.length; i += 1) {
+      const shown = Math.min(steps[i].dur * 0.78, Math.max(70, steps[i].dur - 45));
+      if (elapsed >= steps[i].at && elapsed < steps[i].at + shown) index = i;
+    }
+    paintDemoKey(index >= 0 ? steps[index].name : null);
+    if (index >= 0 && index !== sounded) {
+      sounded = index;
+      const ms = Math.max(90, Math.min(steps[index].dur * 0.88, steps[index].dur - 30));
+      strikeKey(ctx, etFreq(nameToMidi(steps[index].name)), ms / 1000);
+      const parsed = parseNote(steps[index].name);
+      $("hero-name").textContent = ruStep(steps[index].name);
+      $("hero-oct").textContent = ruOctave(parsed.oct);
+    }
+    if (elapsed < total) requestAnimationFrame(frame);
+    else stopDemo();
+  };
+  requestAnimationFrame(frame);
+}
+
 function skipNote() {
+  if (state.demo) stopDemo({ restore: false });
   const play = state.play;
   if (!play || state.screen !== "play" || play.index >= play.figure.length) return;
   const now = performance.now();
@@ -855,7 +973,7 @@ function skipNote() {
 }
 
 function onKeyClick(name) {
-  if (state.screen !== "play" || !state.practice || !state.play) return;
+  if (state.demo || state.screen !== "play" || !state.practice || !state.play) return;
   const now = performance.now();
   const target = state.play.song.notes[state.play.index];
   if (name === target) tryHit(now);
@@ -949,7 +1067,7 @@ function readEar() {
 
 function updatePlayEar(now) {
   const play = state.play;
-  if (!play || play.index >= play.figure.length) return;
+  if (!play || play.index >= play.figure.length || state.demo) return;
   const threshold = gate();
   if (ear.rms < threshold * 0.75) {
     play.released = true;
@@ -1012,8 +1130,9 @@ function paintBeat(now, musical) {
   word.textContent = beatWord(play.meter, beatIndex);
   word.classList.toggle("late", late);
   const counting = musical < play.dues[0] - play.beatMs * 0.12;
-  $("play-kicker").textContent = counting ? "Считайте" : "Сыграйте";
-  if (late) showTiming("late", "Пора");
+  $("play-kicker").textContent = state.demo ? "Слушайте" : counting ? "Считайте" : "Сыграйте";
+  if (state.demo) showTiming("", "");
+  else if (late) showTiming("late", "Пора");
 }
 
 function updateStick(now) {
@@ -1142,6 +1261,7 @@ function onClick(event) {
   else if (action === "songs") openSongs();
   else if (action === "play-song") startSong(button.dataset.id);
   else if (action === "skip-note") skipNote();
+  else if (action === "demo") toggleDemo();
   else if (action === "replay") startSong(state.play.song.id);
   else if (action === "sens") {
     state.sensitivity = button.dataset.sens;
