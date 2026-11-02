@@ -19,7 +19,6 @@ import { analyze, matchesTarget } from "./pitch.js";
 import { SONGS, beatWord, songFigure, songFits, songSpan } from "./songs.js";
 
 const STORAGE_KEY = "piano-lessons-v1";
-const LOOKAHEAD = 2.4;
 const SCREENS = ["intro", "cal", "songs", "play", "done"];
 
 const $ = (id) => document.getElementById(id);
@@ -448,7 +447,7 @@ function renderReview() {
   const issues = cal.issues || [];
   if (cal.saved && !issues.length && !skipped.length) {
     $("review-title").textContent = "Пианино записано";
-    $("review-body").textContent = "Все клавиши на месте. Можно выбирать мелодию — палочка покажет, куда нажимать.";
+    $("review-body").textContent = "Все клавиши на месте. Можно выбирать мелодию — жёлтый столбец показывает, куда нажимать.";
   } else if (!cal.saved) {
     $("review-title").textContent = "Мало клавиш";
     $("review-body").textContent = "Чтобы открыть мелодии, нужно записать хотя бы одну октаву белых клавиш.";
@@ -569,8 +568,8 @@ function openSongs() {
 
 function renderSongs() {
   $("songs-lead").textContent = state.practice
-    ? "Огоньки считают доли. Нажимайте клавишу на экране, когда палочка её касается."
-    : "Огоньки считают доли. Нажимайте, когда палочка касается клавиши.";
+    ? "Жёлтый столбец — эта клавиша. Оранжевый — следующая, синий — ещё одна. Нажимайте жёлтую на экране в долю."
+    : "Жёлтый столбец — эта клавиша. Оранжевый — следующая, синий — ещё одна. Нажимайте жёлтую в долю.";
   const root = $("song-list");
   root.replaceChildren();
   for (const song of SONGS) {
@@ -656,7 +655,7 @@ async function startSong(id) {
   const countName = meter === 3 ? "три" : "четыре";
   const where = state.practice ? "клавишу на экране" : "клавишу на пианино";
   $("play-mode").textContent =
-    `Сначала ${countName} доли без игры. Нажимайте ${where}, когда палочка касается клавиши: она заполняется, пока ноту держат, и вспыхивает, когда её пора отпустить.`;
+    `Сначала ${countName} доли без игры. Жёлтый столбец стоит на нужной клавише — нажимайте ${where}. Столбец заполняется, пока ноту держат, и вспыхивает, когда пора отпустить.`;
   $("play-listen").hidden = state.practice;
   $("sens-play").hidden = state.practice;
   $("sticks").replaceChildren();
@@ -691,15 +690,8 @@ function refreshPlayNote() {
 }
 
 function placeGuide() {
-  const play = state.play;
-  if (!play) return;
-  const name = play.song.notes[play.index];
-  const spot = keyCenter(play.layout, name);
-  if (!spot) return;
   const lane = $("lane");
-  lane.hidden = false;
-  lane.style.left = `${spot.left}%`;
-  lane.style.width = `${spot.width}%`;
+  if (lane) lane.hidden = true;
 }
 
 function musicalNow(now) {
@@ -1074,17 +1066,19 @@ function updateStick(now) {
     else if (holdProgress > 0.22) showTiming("on", "Держите");
   }
   paintHold(holdProgress);
-  const height = $("highway").clientHeight;
-  if (height < 40) return;
-  const pxPerBeat = height / LOOKAHEAD;
   const pool = $("sticks");
-  const visible = [];
-  for (let i = play.index; i < play.figure.length; i += 1) {
-    const away = (play.dues[i] - musical) / play.beatMs;
-    if (away > LOOKAHEAD + 0.35) break;
-    visible.push(i);
+  const roles = ["now", "next", "soon"];
+  const columns = [];
+  const seen = new Set();
+  for (let offset = 0; offset < roles.length; offset += 1) {
+    const noteIndex = play.index + offset;
+    if (noteIndex >= play.figure.length) break;
+    const step = play.figure[noteIndex];
+    if (seen.has(step.name)) continue;
+    seen.add(step.name);
+    columns.push({ noteIndex, role: roles[columns.length], step });
   }
-  while (pool.children.length < visible.length) {
+  while (pool.children.length < columns.length) {
     const el = document.createElement("div");
     el.className = "note-stick";
     const body = document.createElement("div");
@@ -1092,25 +1086,30 @@ function updateStick(now) {
     const fill = document.createElement("div");
     fill.className = "stick-fill";
     body.append(fill);
-    el.append(body);
+    const name = document.createElement("span");
+    name.className = "stick-name";
+    el.append(body, name);
     pool.append(el);
   }
-  while (pool.children.length > visible.length) pool.lastElementChild.remove();
-  visible.forEach((noteIndex, slot) => {
+  while (pool.children.length > columns.length) pool.lastElementChild.remove();
+  columns.forEach((column, slot) => {
     const el = pool.children[slot];
-    const step = play.figure[noteIndex];
-    const spot = keyCenter(play.layout, step.name);
-    const away = Math.max(0, (play.dues[noteIndex] - musical) / play.beatMs);
-    const stickH = Math.max(28, Math.min(height * 0.92, step.beats * pxPerBeat));
-    const filling = play.sustain && noteIndex === play.sustain.index;
-    el.style.left = spot ? `${spot.center}%` : "50%";
-    el.style.height = `${stickH}px`;
-    el.style.transform = `translate(-50%, ${height - away * pxPerBeat - stickH}px)`;
-    el.style.zIndex = noteIndex === play.index ? "2" : "1";
-    el.classList.toggle("now", noteIndex === play.index);
-    el.classList.toggle("waiting", noteIndex === play.index && play.holding && !filling);
-    el.classList.toggle("sustain", !!filling);
-    el.classList.toggle("ghost", noteIndex !== play.index);
+    const spot = keyCenter(play.layout, column.step.name);
+    const filling = play.sustain && column.noteIndex === play.sustain.index;
+    el.style.left = spot ? `${spot.left}%` : "0";
+    el.style.width = spot ? `${spot.width}%` : "8%";
+    el.style.height = "100%";
+    el.style.transform = "none";
+    el.className = `note-stick ${column.role}${filling ? " sustain" : ""}${column.role === "now" && play.holding && !filling ? " waiting" : ""}`;
+    const label = el.querySelector(".stick-name");
+    if (label) {
+      const note = parseNote(column.step.name);
+      const step = document.createElement("b");
+      step.textContent = ruStep(column.step.name);
+      const oct = document.createElement("small");
+      oct.textContent = ruOctaveShort(note.oct);
+      label.replaceChildren(step, oct);
+    }
     const fill = el.querySelector(".stick-fill");
     if (fill) fill.style.height = filling ? `${holdProgress * 100}%` : "0%";
   });
