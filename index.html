@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Уроки пианино</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%2314110e' width='32' height='32' rx='7'/%3E%3Crect fill='%23f3ead7' x='5' y='6' width='5' height='20' rx='1'/%3E%3Crect fill='%23f3ead7' x='11' y='6' width='5' height='20' rx='1'/%3E%3Crect fill='%23f3ead7' x='17' y='6' width='5' height='20' rx='1'/%3E%3Crect fill='%23f3ead7' x='23' y='6' width='4' height='20' rx='1'/%3E%3Crect fill='%2314110e' x='8.2' y='6' width='3.2' height='12' rx='.8'/%3E%3Crect fill='%2314110e' x='14.4' y='6' width='3.2' height='12' rx='.8'/%3E%3Crect fill='%23e6b15c' x='20.2' y='6' width='3.2' height='12' rx='.8'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body data-screen="intro">
+    <section id="screen-intro" class="screen">
+      <div class="wrap intro">
+        <div class="intro-copy">
+          <p class="kicker">В браузере, без установки</p>
+          <h1>Уроки пианино</h1>
+          <p class="lead">
+            Микрофон слышит высоту звука. Сначала вы нажимаете клавиши по порядку —
+            белые, потом чёрные — и страница запоминает именно ваш инструмент.
+            Затем выбираете мелодию: огоньки считают доли, палочка касается
+            клавиши ровно на долю и ждёт, если вы опоздали.
+          </p>
+          <ol class="steps">
+            <li>
+              <span>1</span>
+              <div>
+                <strong>Микрофон</strong>
+                <p>Разрешаете доступ и проверяете, что нота видна на экране.</p>
+              </div>
+            </li>
+            <li>
+              <span>2</span>
+              <div>
+                <strong>Калибровка</strong>
+                <p>Слева направо: все белые клавиши диапазона, затем чёрные.</p>
+              </div>
+            </li>
+            <li>
+              <span>3</span>
+              <div>
+                <strong>Мелодия</strong>
+                <p>Простые пьесы по одной ноте. Нажимайте, когда палочка касается клавиши.</p>
+              </div>
+            </li>
+          </ol>
+
+          <div id="intro-fresh" class="actions">
+            <button id="start-mic" class="btn" type="button" data-action="start-mic">Открыть микрофон</button>
+            <button class="btn ghost" type="button" data-action="practice">Репетиция мышкой</button>
+          </div>
+          <div id="intro-saved" class="actions" hidden>
+            <p class="saved-title">Клавиши уже записаны</p>
+            <p id="saved-detail"></p>
+            <button class="btn" type="button" data-action="play-saved">Выбрать мелодию</button>
+            <button class="btn ghost" type="button" data-action="recal">Калибровать заново</button>
+            <button class="btn ghost" type="button" data-action="practice">Репетиция мышкой</button>
+          </div>
+          <p id="mic-error" class="error" hidden></p>
+          <p class="fine">Звук обрабатывается только в браузере и никуда не отправляется.</p>
+        </div>
+
+        <div class="hero-art" aria-hidden="true">
+          <div class="art-stage">
+            <div class="art-stick"></div>
+            <div class="art-keys">
+              <i></i><i></i><i></i><i class="lit"></i><i></i><i></i><i></i><i></i>
+              <b class="b1"></b><b class="b2"></b><b class="b3"></b><b class="b4"></b><b class="b5"></b>
+            </div>
+          </div>
+          <p>Палочка ждёт вашу ноту</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-cal" class="screen" hidden>
+      <div class="wrap narrow">
+        <div class="screen-bar">
+          <button class="text-btn" type="button" data-action="home">← Начало</button>
+          <p class="brand-mini">Уроки пианино</p>
+        </div>
+
+        <div id="cal-choose">
+          <p class="kicker">Калибровка</p>
+          <h1>Какой кусок клавиатуры записываем?</h1>
+          <p class="lead">Нажимайте клавиши по порядку. Страница запомнит звук каждой.</p>
+          <div id="range-cards" class="range-cards"></div>
+        </div>
+
+        <div id="cal-listen" hidden>
+          <p class="kicker">Проверка микрофона</p>
+          <h1>Сыграйте любую клавишу</h1>
+          <p class="lead">Положите устройство ближе к пианино. Если здесь появляется нота — можно калибровать.</p>
+        </div>
+
+        <div id="cal-run" hidden>
+          <div class="cal-progress">
+            <div>
+              <p id="cal-kicker" class="kicker"></p>
+              <p id="cal-step" class="step-count"></p>
+            </div>
+            <div class="track" aria-hidden="true"><div id="cal-bar"></div></div>
+          </div>
+          <h1 id="cal-ask" aria-live="polite"></h1>
+          <p id="cal-find" class="lead" hidden>
+            До первой октавы — белая клавиша сразу слева от двух чёрных, ближе к середине пианино.
+          </p>
+          <div class="actions">
+            <button id="capture" class="btn" type="button" data-action="capture" disabled>Записать клавишу</button>
+            <button id="undo" class="btn ghost" type="button" data-action="undo">Откатить последнюю</button>
+            <button class="btn ghost" type="button" data-action="skip-key">Пропустить</button>
+          </div>
+          <p class="fine">Пробел тоже записывает клавишу, когда полоска уже пошла.</p>
+        </div>
+
+        <div id="tuner" hidden>
+          <div id="tuner-note">Слушаю…</div>
+          <div id="tuner-hz">Жду ноту</div>
+          <div class="meter" id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div id="stability" aria-hidden="true"><span id="stability-fill"></span></div>
+          <p id="tuner-hint">Сыграйте клавишу и подержите её</p>
+          <div class="sens" id="sens-cal">
+            <span>Микрофон</span>
+            <button type="button" data-action="sens" data-sens="2.6">Чувствительнее</button>
+            <button type="button" class="on" data-action="sens" data-sens="4">Обычно</button>
+            <button type="button" data-action="sens" data-sens="7">Строже</button>
+          </div>
+        </div>
+
+        <div id="listen-actions" class="actions" hidden>
+          <button id="listen-next" class="btn" type="button" data-action="listen-next" disabled>Дальше, к калибровке</button>
+          <button class="btn ghost" type="button" data-action="listen-next">Пропустить проверку</button>
+        </div>
+
+        <div id="cal-board" class="board" hidden>
+          <div class="piano-shell">
+            <div id="cal-keys" class="keys"></div>
+          </div>
+        </div>
+
+        <div id="cal-review" hidden>
+          <p class="kicker">Готово</p>
+          <h1 id="review-title">Пианино записано</h1>
+          <p id="review-body" class="lead"></p>
+          <ul id="review-issues" class="issues"></ul>
+          <div class="actions">
+            <button id="review-songs" class="btn" type="button" data-action="songs">К мелодиям</button>
+            <button class="btn ghost" type="button" data-action="redo-all">Пройти ещё раз</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-songs" class="screen" hidden>
+      <div class="wrap">
+        <div class="screen-bar">
+          <button class="text-btn" type="button" data-action="home">← Начало</button>
+          <p class="brand-mini">Уроки пианино</p>
+          <button class="text-btn" type="button" data-action="recal">Калибровка</button>
+        </div>
+        <p class="kicker">Мелодии</p>
+        <h1>С чего начать</h1>
+        <p id="songs-lead" class="lead"></p>
+        <div id="song-list" class="song-list"></div>
+      </div>
+    </section>
+
+    <section id="screen-play" class="screen" hidden>
+      <div class="play-frame">
+        <div class="play-head">
+          <button class="text-btn" type="button" data-action="songs">← Мелодии</button>
+          <div class="play-heading">
+            <h1 id="play-title"></h1>
+            <p id="play-mode"></p>
+          </div>
+          <div class="play-stats">
+            <span id="play-count"></span>
+            <span id="play-miss" hidden></span>
+          </div>
+        </div>
+        <div class="track" aria-hidden="true"><div id="play-bar"></div></div>
+
+        <div class="play-main">
+          <aside class="hero-note" id="hero-note">
+            <p class="kicker" id="play-kicker">Сыграйте</p>
+            <p id="hero-name">До</p>
+            <p id="hero-oct">первая октава</p>
+            <p id="timing" aria-live="polite"></p>
+            <p id="hero-msg" aria-live="polite"></p>
+            <ol id="upcoming"></ol>
+            <div id="play-listen">
+              <span id="play-heard">Слушаю пианино</span>
+              <div class="meter" id="play-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div class="sens" id="sens-play">
+              <span>Микрофон</span>
+              <button type="button" data-action="sens" data-sens="2.6">Чувствительнее</button>
+              <button type="button" class="on" data-action="sens" data-sens="4">Обычно</button>
+              <button type="button" data-action="sens" data-sens="7">Строже</button>
+            </div>
+            <button class="text-btn" type="button" data-action="skip-note">Пропустить ноту</button>
+          </aside>
+
+          <div class="stage">
+            <div class="rhythm">
+              <div id="beats" aria-hidden="true"></div>
+              <p id="beat-word"></p>
+            </div>
+            <div class="highway-wrap">
+              <div id="highway">
+                <div id="lane" hidden></div>
+                <div id="hitline"></div>
+                <div id="sticks"></div>
+              </div>
+            </div>
+            <div class="piano-shell">
+              <div id="play-keys" class="keys"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-done" class="screen" hidden>
+      <div class="wrap done">
+        <p class="kicker">Готово</p>
+        <h1 id="done-title">Чисто</h1>
+        <p id="done-song" class="done-song"></p>
+        <p id="done-score" class="lead"></p>
+        <div class="actions">
+          <button class="btn" type="button" data-action="replay">Сыграть ещё раз</button>
+          <button class="btn ghost" type="button" data-action="songs">Другая мелодия</button>
+        </div>
+      </div>
+    </section>
+
+    <noscript>Для уроков нужен JavaScript: он слушает микрофон и показывает ноты.</noscript>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
