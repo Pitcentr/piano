@@ -310,6 +310,7 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
 #timing.on { color: #b7e0bc; }
 #timing.early { color: #f0d7a2; }
 #timing.late { color: #ffc7be; }
+#timing.release { color: #fff6dc; }
 #hero-msg { min-height: 1.4em; margin-top: 8px; color: #ffc7be; }
 #hero-msg:empty { display: none; }
 #upcoming { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 16px 0; }
@@ -382,11 +383,72 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
 .note-stick.ghost { opacity: 0.42; }
 .note-stick.ghost .stick-body { width: 12px; margin: 0 auto; }
 .stick-body {
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
   border-radius: 999px;
   background: linear-gradient(#fff7dc, #ffc14d 46%, #ef7a32);
   box-shadow: 0 12px 24px rgba(255, 150, 40, 0.32);
+}
+.stick-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  border-radius: inherit;
+  background: linear-gradient(#ffffff, #d8ffd4 42%, #3f8f62);
+  box-shadow: 0 0 18px rgba(143, 209, 154, 0.72);
+}
+.stick-fill::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 10px;
+  background: #fff;
+  box-shadow: 0 0 14px #fff;
+}
+.note-stick.sustain .stick-body {
+  background: rgba(255, 247, 220, 0.22);
+  box-shadow: inset 0 0 0 2px rgba(255, 214, 120, 0.95), 0 0 18px rgba(255, 193, 77, 0.35);
+}
+.stick-burst {
+  position: absolute;
+  bottom: 0;
+  z-index: 5;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.stick-burst::before {
+  content: "";
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgba(255, 214, 110, 0.95) 38%, transparent 70%);
+  animation: burst-ring 0.7s ease-out forwards;
+}
+.stick-burst i {
+  position: absolute;
+  width: 8px;
+  height: 22px;
+  margin: -11px 0 0 -4px;
+  border-radius: 999px;
+  background: linear-gradient(#fff, #ffc14d);
+  box-shadow: 0 0 14px #ffd36a;
+  animation: stick-spark 0.7s ease-out forwards;
+}
+@keyframes burst-ring {
+  0% { opacity: 1; transform: scale(0.35); }
+  100% { opacity: 0; transform: scale(4.8); }
+}
+@keyframes stick-spark {
+  to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.35); }
 }
 .note-stick.waiting .stick-body { animation: stick-wait 0.85s ease-in-out infinite; }
 @keyframes stick-wait {
@@ -467,6 +529,7 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
   left: 2px;
   right: 2px;
   bottom: 8px;
+  z-index: 1;
   text-align: center;
   pointer-events: none;
 }
@@ -474,6 +537,19 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
 .key.black .key-label { color: #1a140e; top: 8px; bottom: auto; }
 .key-tick { font-size: 10px; letter-spacing: 0.06em; color: #b3a48f; }
 .key.white.target .key-tick { visibility: hidden; }
+.key.sustain::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--hold, 0) * 100%);
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(63, 143, 98, 0.15), rgba(255, 248, 220, 0.92));
+}
+.key.black.sustain::before {
+  background: linear-gradient(to top, rgba(40, 24, 8, 0.2), #f3ddaa);
+}
 
 .done { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; }
 .done-song { font-family: var(--serif); font-size: 28px; margin-top: 8px; }
@@ -494,6 +570,6 @@ button.song:hover { border-color: rgba(230, 177, 92, 0.55); transform: translate
   #screen-play { padding-top: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .art-stick, .note-stick.waiting .stick-body, .shake { animation: none; }
+  .art-stick, .note-stick.waiting .stick-body, .shake, .stick-burst::before, .stick-burst i { animation: none; }
   button.song:hover { transform: none; }
 }
