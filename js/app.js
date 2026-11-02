@@ -26,6 +26,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   screen: "intro",
   practice: false,
+  missAdvance: false,
   calibration: loadCalibration(),
   audio: null,
   noiseFloor: 0.012,
@@ -667,6 +668,7 @@ async function startSong(id) {
   $("sticks").replaceChildren();
   showTiming("", "");
   paintSens();
+  paintMissAdvance();
   refreshPlayNote();
 }
 
@@ -692,7 +694,8 @@ function refreshPlayNote() {
     item.textContent = ruStep(coming);
     list.append(item);
   });
-  paintKeyboard($("play-keys"), { target: name, times });
+  const bad = play.badUntil > performance.now() ? play.badName : null;
+  paintKeyboard($("play-keys"), { target: name, bad, times });
   placeGuide();
 }
 
@@ -729,15 +732,17 @@ function inHitWindow(now) {
   return beatsUntil(now) <= 0.7;
 }
 
-function advanceNote() {
+function advanceNote({ keepFeedback = false } = {}) {
   const play = state.play;
   play.index += 1;
   play.openUntil = 0;
   play.attackAt = 0;
   play.peakRms = 0;
-  play.message = "";
-  play.badName = null;
-  play.badUntil = 0;
+  if (!keepFeedback) {
+    play.message = "";
+    play.badName = null;
+    play.badUntil = 0;
+  }
   play.earlyHold = false;
   ear.history = [];
   ear.matchStreak = 0;
@@ -844,14 +849,29 @@ function onWrong(now, name) {
   play.message = `Это ${sameStepLabel(name)}, а нужна ${sameStepLabel(target)}`;
   play.openUntil = 0;
   ear.wrongStreak = 0;
-  $("hero-msg").textContent = play.message;
   $("play-miss").hidden = false;
   $("play-miss").textContent = `Мимо: ${play.mistakes}`;
+  showTiming("late", "Мимо");
+  if (state.missAdvance) {
+    if (play.holding) resumeClock(now, play.heldMusical);
+    play.earlyHold = false;
+    advanceNote({ keepFeedback: true });
+    return;
+  }
+  $("hero-msg").textContent = play.message;
   paintKeyboard($("play-keys"), { target, bad: name, times: pressTimes(play) });
   const hero = $("hero-note");
   hero.classList.remove("shake");
   void hero.offsetWidth;
   hero.classList.add("shake");
+}
+
+function paintMissAdvance() {
+  const button = $("miss-advance");
+  if (!button) return;
+  button.classList.toggle("on", state.missAdvance);
+  button.setAttribute("aria-pressed", state.missAdvance ? "true" : "false");
+  button.textContent = state.missAdvance ? "Неверная клавиша: дальше" : "Неверная клавиша: ждать";
 }
 
 function paintDemoKey(name) {
@@ -1284,6 +1304,10 @@ function onClick(event) {
   else if (action === "songs") openSongs();
   else if (action === "play-song") startSong(button.dataset.id);
   else if (action === "skip-note") skipNote();
+  else if (action === "miss-advance") {
+    state.missAdvance = !state.missAdvance;
+    paintMissAdvance();
+  }
   else if (action === "demo") toggleDemo();
   else if (action === "replay") startSong(state.play.song.id);
   else if (action === "sens") {
